@@ -6,9 +6,7 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.types import Message
 import yt_dlp
 
-# Токен берется из настроек сервера
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
@@ -21,13 +19,16 @@ def download_video(url: str, out_dir: str):
         "merge_output_format": "mp4",
         "quiet": True,
         "noplaylist": True,
+        "socket_timeout": 15,
+        "nocheckcertificate": True,
+        "user_agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             return ydl.prepare_filename(info)
     except Exception as e:
-        print("Ошибка скачивания:", e)
+        print(f"Ошибка скачивания: {e}")
         return None
 
 @dp.message(F.text)
@@ -39,10 +40,12 @@ async def on_message(message: Message):
     url = match.group(1)
     status = await message.reply("⏳ Скачиваю видео...")
 
+    loop = asyncio.get_event_loop()
     with tempfile.TemporaryDirectory() as tmp:
-        path = download_video(url, tmp)
+        path = await loop.run_in_executor(None, download_video, url, tmp)
+        
         if not path or not os.path.exists(path):
-            await status.edit_text("❌ Не удалось скачать видео.")
+            await status.edit_text("❌ Не удалось скачать видео. Возможно, оно приватное или соцсеть заблокировала скачивание.")
             return
         
         with open(path, "rb") as f:
